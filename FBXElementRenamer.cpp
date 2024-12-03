@@ -1,4 +1,4 @@
-#include <fbxsdk.h>
+﻿#include <fbxsdk.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -9,12 +9,13 @@
 #endif
 
 void PrintHelp(const char* programName) {
-    std::cout << "Usage: " << programName << " -i <input_fbx> [-o <output_fbx>] [-mat <old_mat_name> <new_mat_name>] [-mesh <old_mesh_name> <new_mesh_name>] [-h | --help]\n";
+    std::cout << "Usage: " << programName << " -i <input_fbx> [-o <output_fbx>] [-mat <old_mat_name> <new_mat_name>] [-mesh <old_mesh_name> <new_mesh_name>] [-atf] [-h | --help]\n";
     std::cout << "\nOptions:\n";
     std::cout << "  -i <input_fbx>                        Specify the input FBX file.\n";
     std::cout << "  -o <output_fbx>                       Specify the output FBX file. If not specified, overwrites the input file.\n";
     std::cout << "  -mat <old_mat_name> <new_mat_name>    Rename a material from old name to new name.\n";
     std::cout << "  -mesh <old_mesh_name> <new_mesh_name> Rename a mesh from old name to new name.\n";
+    std::cout << "  -atf                                  Convert FBX file from ASCII to binary format.\n";
     std::cout << "  -h, --help                            Display this help message.\n";
 }
 
@@ -22,6 +23,7 @@ int main(int argc, char** argv)
 {
     std::string inputFbx;
     std::string outputFbx;
+    bool convertToBinary = false;
 
     struct RenameOperation {
         std::string type; // "material" or "mesh"
@@ -60,6 +62,9 @@ int main(int argc, char** argv)
             op.newName = argv[++i];
             renameOps.push_back(op);
         }
+        else if (arg == "-atf") {
+            convertToBinary = true;
+        }
         else if (arg == "-h" || arg == "--help") {
             PrintHelp(argv[0]);
             return 0;
@@ -79,8 +84,8 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    if (renameOps.empty()) {
-        std::cout << "Error: No rename operations specified.\n";
+    if (renameOps.empty() && !convertToBinary) {
+        std::cout << "Error: No operations specified.\n";
         PrintHelp(argv[0]);
         return -1;
     }
@@ -137,7 +142,6 @@ int main(int argc, char** argv)
                     material->SetName(op.newName.c_str());
                     found = true;
                     std::cout << "Material '" << op.oldName << "' renamed to '" << op.newName << "'.\n";
-                    break; // Remove this break if you want to rename multiple materials with the same name
                 }
             }
             if (!found) {
@@ -152,7 +156,6 @@ int main(int argc, char** argv)
                     node->SetName(op.newName.c_str());
                     found = true;
                     std::cout << "Mesh '" << op.oldName << "' renamed to '" << op.newName << "'.\n";
-                    break; // Remove this break if you want to rename multiple meshes with the same name
                 }
             }
             if (!found) {
@@ -168,6 +171,30 @@ int main(int argc, char** argv)
         exporter->Destroy();
         sdkManager->Destroy();
         return -1;
+    }
+
+    // Set export format to binary if -atf is specified
+    if (convertToBinary) {
+        int formatCount = sdkManager->GetIOPluginRegistry()->GetWriterFormatCount();
+        int binaryFormatIndex = -1;
+
+        for (int i = 0; i < formatCount; ++i) {
+            if (sdkManager->GetIOPluginRegistry()->WriterIsFBX(i)) {
+                std::string description = sdkManager->GetIOPluginRegistry()->GetWriterFormatDescription(i);
+                if (description.find("binary") != std::string::npos) {
+                    binaryFormatIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (binaryFormatIndex != -1) {
+            exporter->SetFileExportVersion("FBX_2014_BINARY", FbxSceneRenamer::eNone);
+            std::cout << "Exporting in binary format.\n";
+        }
+        else {
+            std::cout << "Binary format not found. Exporting in default format.\n";
+        }
     }
 
     // Export scene
