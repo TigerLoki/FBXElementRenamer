@@ -19,6 +19,9 @@ This utility allows you to rename materials and meshes within an FBX file. You c
 
 - `-mesh <old_mesh_name> <new_mesh_name>`
   - Rename a mesh from the old name to the new name. You can use this option multiple times to rename multiple meshes.
+  
+- `-atb`
+  - Convert the FBX file from ASCII format to binary format. Use this option if you want to change the file format during processing.
 
 - `-h`, `--help`
   - Display the help message.
@@ -27,14 +30,14 @@ This utility allows you to rename materials and meshes within an FBX file. You c
 
 1. **Rename a material:**
    
-   ```fbx_renamer -i model.fbx -mat "OldMaterialName" "NewMaterialName"```
+   ```FBXElementRenamer.exe -i model.fbx -mat "OldMaterialName" "NewMaterialName"```
 2. **Rename multiple materials:**
 
-   ```fbx_renamer -i model.fbx -mat "OldMat1" "NewMat1" -mat "OldMat2" "NewMat2"```
+   ```FBXElementRenamer.exe -i model.fbx -mat "OldMat1" "NewMat1" -mat "OldMat2" "NewMat2"```
 
-4. **Rename a mesh and save to a new file:**
+3. **Rename a mesh and save to a new file:**
 
-   ```fbx_renamer -i model.fbx -o new_model.fbx -mesh "OldMeshName" "NewMeshName"```
+   ```FBXElementRenamer.exe -i model.fbx -o new_model.fbx -mesh "OldMeshName" "NewMeshName"```
 
 **Notes:**
 
