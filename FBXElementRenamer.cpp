@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <regex> // Added for regex functionality
 
 #ifdef IOS_REF
 #undef  IOS_REF
@@ -9,13 +10,14 @@
 #endif
 
 void PrintHelp(const char* programName) {
-    std::cout << "Usage: " << programName << " -i <input_fbx> [-o <output_fbx>] [-mat <old_mat_name> <new_mat_name>] [-mesh <old_mesh_name> <new_mesh_name>] [-atf] [-h | --help]\n";
+    std::cout << "Usage: " << programName << " -i <input_fbx> [-o <output_fbx>] [-mat <old_mat_name> <new_mat_name>] [-mesh <old_mesh_name> <new_mesh_name>] [-atf] [-regex] [-h | --help]\n";
     std::cout << "\nOptions:\n";
     std::cout << "  -i <input_fbx>                        Specify the input FBX file.\n";
     std::cout << "  -o <output_fbx>                       Specify the output FBX file. If not specified, overwrites the input file.\n";
     std::cout << "  -mat <old_mat_name> <new_mat_name>    Rename a material from old name to new name.\n";
-    std::cout << "  -mesh <old_mesh_name> <new_mesh_name> Rename a mesh from old name to new name.\n";
+    std::cout << "  -mesh <old_mesh_name> <new_mesh_name> Rename meshes that contain <old_mesh_name> (or match regex if -regex is used) to have it replaced with <new_mesh_name>.\n";
     std::cout << "  -atf                                  Convert FBX file from ASCII to binary format.\n";
+    std::cout << "  -regex                                Treat old_mat_name/old_mesh_name as a regex pattern.\n";
     std::cout << "  -h, --help                            Display this help message.\n";
 }
 
@@ -24,6 +26,7 @@ int main(int argc, char** argv)
     std::string inputFbx;
     std::string outputFbx;
     bool convertToBinary = false;
+    bool useRegex = false;
 
     struct RenameOperation {
         std::string type; // "material" or "mesh"
@@ -64,6 +67,9 @@ int main(int argc, char** argv)
         }
         else if (arg == "-atf") {
             convertToBinary = true;
+        }
+        else if (arg == "-regex") {
+            useRegex = true;
         }
         else if (arg == "-h" || arg == "--help") {
             PrintHelp(argv[0]);
@@ -134,32 +140,86 @@ int main(int argc, char** argv)
     // Perform rename operations
     for (const auto& op : renameOps) {
         bool found = false;
+
         if (op.type == "material") {
             int materialCount = scene->GetMaterialCount();
             for (int i = 0; i < materialCount; ++i) {
                 FbxSurfaceMaterial* material = scene->GetMaterial(i);
-                if (material && material->GetName() == op.oldName) {
-                    material->SetName(op.newName.c_str());
-                    found = true;
-                    std::cout << "Material '" << op.oldName << "' renamed to '" << op.newName << "'.\n";
+                if (material) {
+                    std::string currentName = material->GetName();
+                    std::string newName;
+
+                    if (useRegex) {
+                        try {
+                            std::regex pattern(op.oldName);
+                            newName = std::regex_replace(currentName, pattern, op.newName);
+                        }
+                        catch (std::regex_error& e) {
+                            std::cout << "Regex error in material rename: " << e.what() << "\n";
+                            continue;
+                        }
+                    }
+                    else {
+                        // Non-regex: exact match only
+                        if (currentName == op.oldName) {
+                            newName = op.newName;
+                        }
+                        else {
+                            newName = currentName;
+                        }
+                    }
+
+                    if (newName != currentName) {
+                        material->SetName(newName.c_str());
+                        found = true;
+                        std::cout << "Material '" << currentName << "' renamed to '" << newName << "'.\n";
+                    }
                 }
             }
             if (!found) {
-                std::cout << "Material with name '" << op.oldName << "' not found.\n";
+                std::cout << "Material with pattern '" << op.oldName << "' not found.\n";
             }
+
         }
         else if (op.type == "mesh") {
             int nodeCount = scene->GetNodeCount();
             for (int i = 0; i < nodeCount; ++i) {
                 FbxNode* node = scene->GetNode(i);
-                if (node && node->GetMesh() && node->GetName() == op.oldName) {
-                    node->SetName(op.newName.c_str());
-                    found = true;
-                    std::cout << "Mesh '" << op.oldName << "' renamed to '" << op.newName << "'.\n";
+                if (node && node->GetMesh()) {
+                    std::string nodeName = node->GetName();
+                    std::string newNodeName;
+
+                    if (useRegex) {
+                        try {
+                            std::regex pattern(op.oldName);
+                            newNodeName = std::regex_replace(nodeName, pattern, op.newName);
+                        }
+                        catch (std::regex_error& e) {
+                            std::cout << "Regex error in mesh rename: " << e.what() << "\n";
+                            continue;
+                        }
+                    }
+                    else {
+                        // Non-regex: substring find and replace first occurrence
+                        size_t pos = nodeName.find(op.oldName);
+                        if (pos != std::string::npos) {
+                            newNodeName = nodeName;
+                            newNodeName.replace(pos, op.oldName.size(), op.newName);
+                        }
+                        else {
+                            newNodeName = nodeName;
+                        }
+                    }
+
+                    if (newNodeName != nodeName) {
+                        node->SetName(newNodeName.c_str());
+                        found = true;
+                        std::cout << "Mesh '" << nodeName << "' renamed to '" << newNodeName << "'.\n";
+                    }
                 }
             }
             if (!found) {
-                std::cout << "Mesh with name '" << op.oldName << "' not found.\n";
+                std::cout << "No mesh matching pattern '" << op.oldName << "' found.\n";
             }
         }
     }
